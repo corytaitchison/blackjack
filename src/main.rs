@@ -285,6 +285,12 @@ fn play() {
             // --- Inputs ---
 
             let mut split = false;
+            let mut bet = 0usize;
+            let mut hand2 = Hand {
+                cards: Cards { cards: vec![] },
+                busted: false,
+                sum: Card::Def(0),
+            };
 
             macro_rules! player_input {
                 ( $e:expr ) => {{
@@ -304,6 +310,7 @@ fn play() {
                             "sp" => {
                                 if $e.cards.cards[0] == $e.cards.cards[1]
                                     && wallet.balance >= wallet.bet
+                                    && bet == 0
                                 {
                                     split = true;
                                     $e.cards.cards.remove(1);
@@ -361,13 +368,6 @@ fn play() {
 
             // --- Play ---
             while choice(dealer_input!(), &mut deck, &mut dealer, &mut wallet) {}
-
-            let mut bet = 0usize;
-            let mut hand2 = Hand {
-                cards: Cards { cards: vec![] },
-                busted: false,
-                sum: Card::Def(0),
-            };
 
             while choice(player_input!(hand), &mut deck, &mut hand, &mut wallet) {
                 if split {
