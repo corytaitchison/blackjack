@@ -1,7 +1,7 @@
 use rand::{seq::SliceRandom, thread_rng};
 use std::io::{stdin, BufRead};
 
-const SHUFFLE_SIZE: usize = 12;
+const SHUFFLE_SIZE: usize = 62;
 const RESHUFFLE: usize = 10;
 const NUM_DECKS: usize = 4;
 const BUST_KWD: &str = &"bust";
@@ -61,7 +61,7 @@ impl PartialEq for Card {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Def(a), Self::Def(b)) => a == b,
-            (Self::Maybe(1, 11), Self::Maybe(1, 11)) => true,
+            (Self::Maybe(a, b), Self::Maybe(c, d)) => (a == c) && (b == d),
             _ => false,
         }
     }
@@ -275,7 +275,7 @@ fn play() {
 
             let mut hand = Hand::new(&mut deck);
 
-            if hand.sum == Card::Def(21) || hand.sum == Card::Maybe(11, 21) {
+            if hand.sum == Card::Maybe(11, 21) {
                 hand.show();
                 println!("Blackjack!");
                 wallet.pay_out(3);
