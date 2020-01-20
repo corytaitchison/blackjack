@@ -39,10 +39,10 @@ impl Deck {
         // self.drawables = (*draws).to_vec();
     }
 
-    fn draw(&mut self) -> Result<u8, ()> {
+    fn draw(&mut self) -> u8 {
         match self.drawables.pop() {
-            Some(n) => Ok(n),
-            None => Err(()),
+            Some(n) => n,
+            None => panic!("Not enough cards!"),
         }
     }
 }
@@ -56,25 +56,12 @@ struct Hand {
 }
 
 impl Hand {
-    fn new(draw_size: u8, deck: &mut Deck) -> Result<Self, ()> {
-        let mut ret = false;
-        let cards: Vec<u8> = (0..draw_size)
-            .map(|_| match deck.draw() {
-                Ok(n) => n,
-                Err(_) => {
-                    ret = true;
-                    1
-                }
-            })
-            .collect();
-        if ret {
-            Err(())
-        } else {
-            Ok(Hand {
-                sum: cards.iter().sum(),
-                busted: false,
-                cards,
-            })
+    fn new(draw_size: u8, deck: &mut Deck) -> Self {
+        let cards: Vec<u8> = (0..draw_size).map(|_| deck.draw()).collect();
+        Hand {
+            sum: cards.iter().sum(),
+            busted: false,
+            cards,
         }
     }
 
@@ -82,14 +69,10 @@ impl Hand {
         println!("{:?} = {}", self.cards, self.sum);
     }
 
-    fn hit(&mut self, deck: &mut Deck) -> Result<(), ()> {
-        let card = match deck.draw() {
-            Ok(n) => n,
-            Err(_) => return Err(()),
-        };
+    fn hit(&mut self, deck: &mut Deck) {
+        let card = deck.draw();
         self.cards.push(card);
         self.sum += card;
-        Ok(())
     }
 }
 
@@ -134,28 +117,26 @@ impl Wallet {
 
 // --- PROGRAM ---
 
-fn choice(input: &str, deck: &mut Deck, hand: &mut Hand, wallet: &mut Wallet) -> Result<bool, ()> {
-    match match input {
-        "s" => return Ok(false),
+fn choice(input: &str, deck: &mut Deck, hand: &mut Hand, wallet: &mut Wallet) -> bool {
+    match input {
+        "s" => return false,
         "h" => hand.hit(deck),
         "d" => {
             match wallet.double() {
-                Ok(_) => match hand.hit(deck) {
-                    Ok(_) => return Ok(false),
-                    Err(_) => return Err(()),
-                },
+                Ok(_) => {
+                    hand.hit(deck);
+                    return false;
+                }
                 Err(_) => {
                     println!("Balance too low (${})", wallet.balance);
-                    return Ok(true);
+                    return true;
                 }
             };
         }
-        BUST_KWD => return Ok(false),
-        _ => Ok(()),
-    } {
-        Ok(_) => Ok(true),
-        Err(_) => Err(()),
+        BUST_KWD => return false,
+        _ => (),
     }
+    true
     // True means keep playing the round
 }
 
@@ -166,16 +147,11 @@ fn play() {
     deck.shuffle();
 
     'main: loop {
-        macro_rules! unwrap_or_break {
-            ( $e:expr ) => {
-                match $e {
-                    Ok(n) => n,
-                    Err(_) => break 'main,
-                }
-            };
+        if deck.drawables.len() < 10 {
+            break 'main;
         }
 
-        println!("Place Bet: (Balance = ${})", wallet.balance);
+        println!("Place Bet:");
         if let Err(_) = wallet.place_bet(loop {
             if let Ok(n) = stdin()
                 .lock()
@@ -192,7 +168,7 @@ fn play() {
             continue 'main;
         }
 
-        let mut hand = unwrap_or_break!(Hand::new(2, &mut deck));
+        let mut hand = Hand::new(2, &mut deck);
 
         if hand.sum == 21 {
             hand.show();
@@ -201,10 +177,10 @@ fn play() {
             continue 'main;
         }
 
-        let mut dealer = unwrap_or_break!(Hand::new(2, &mut deck));
+        let mut dealer = Hand::new(2, &mut deck);
         println!("Dealer: {}", dealer.cards[0]);
 
-        while unwrap_or_break!(choice(
+        while choice(
             // Player
             {
                 hand.show();
@@ -224,11 +200,11 @@ fn play() {
             &mut deck,
             &mut hand,
             &mut wallet,
-        )) {}
+        ) {}
 
         println!("--- DEALER ---");
 
-        while unwrap_or_break!(choice(
+        while choice(
             // Dealer
             {
                 if dealer.sum < 17 {
@@ -246,7 +222,7 @@ fn play() {
             &mut deck,
             &mut dealer,
             &mut wallet,
-        )) {}
+        ) {}
 
         if !hand.busted && (hand.sum > dealer.sum || dealer.busted) {
             println!("You Win!");
@@ -255,6 +231,7 @@ fn play() {
             println!("You Lose!");
             wallet.lose();
         }
+        println!("Balance: ${}", wallet.balance);
     }
     println!("No cards left!");
 }
