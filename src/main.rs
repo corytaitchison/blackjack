@@ -130,12 +130,8 @@ impl Deck {
         self.drawables = self
             .cards
             .choose_multiple(&mut thread_rng(), SHUFFLE_SIZE)
-            // .cloned()
             .map(|&c| c)
             .collect();
-        // println!("{:?}", self.drawables);
-        // let (draws, _) = self.cards.partial_shuffle(&mut thread_rng(), SHUFFLE_SIZE);
-        // self.drawables = (*draws).to_vec();
     }
 
     fn draw(&mut self) -> Card {
