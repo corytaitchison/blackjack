@@ -242,6 +242,7 @@ fn choice(input: &str, deck: &mut Deck, hand: &mut Hand, wallet: &mut Wallet) ->
     // True means keep playing the round
 }
 
+#[allow(unused_assignments)]
 fn play() {
     let mut wallet = Wallet::new();
 
@@ -254,7 +255,7 @@ fn play() {
             if deck.drawables.len() < RESHUFFLE {
                 break 'main;
             }
-            println!("-------");
+            println!("***********");
             println!("Balance: ${}", wallet.balance);
             println!("Place Bet:");
             if let Err(_) = wallet.place_bet(loop {
@@ -287,21 +288,36 @@ fn play() {
 
             // --- Inputs ---
 
+            let mut split = false;
+
             macro_rules! player_input {
-                () => {{
-                    hand.show();
-                    if match hand.sum {
+                ( $e:expr ) => {{
+                    $e.show();
+                    if match $e.sum {
                         Card::Def(n) => n > 21,
                         _ => false,
                     } {
                         println!("Busted!");
-                        hand.busted = true;
+                        $e.busted = true;
                         BUST_KWD
                     } else {
                         match &stdin().lock().lines().next().unwrap().unwrap()[..] {
                             "s" => "s",
                             "h" => "h",
                             "d" => "d",
+                            "sp" => {
+                                if $e.cards.cards[0] == $e.cards.cards[1]
+                                    && wallet.balance >= wallet.bet
+                                {
+                                    split = true;
+                                    $e.cards.cards.remove(1);
+                                    $e.sum = $e.cards.cards[0];
+                                    "h"
+                                } else {
+                                    "tortoise"
+                                }
+                            }
+                            "q" => break 'play,
                             _ => "tortoise",
                         }
                     }
@@ -313,7 +329,6 @@ fn play() {
                     if real_sum!(dealer) < 17 {
                         "h"
                     } else {
-                        dealer.show();
                         if match dealer.sum {
                             Card::Def(n) => n > 21,
                             _ => false,
@@ -327,29 +342,67 @@ fn play() {
                 }};
             }
 
-            // --- Play ---
-
-            while choice(player_input!(), &mut deck, &mut hand, &mut wallet) {}
-            println!("--- DEALER ---");
-            while choice(dealer_input!(), &mut deck, &mut dealer, &mut wallet) {}
-
             // --- Success Validation ---
 
-            let hand_final = real_sum!(hand);
-            let dealer_final = real_sum!(dealer);
-            if !hand.busted && (hand_final >= dealer_final || dealer.busted) {
-                if hand_final == dealer_final {
-                    println!("Push!");
-                    wallet.pay_out(1);
-                } else {
-                    println!("You Win!");
-                    wallet.pay_out(2);
-                }
-            } else {
-                println!("You Lose!");
-                wallet.lose();
+            macro_rules! win_lose {
+                ( $e:expr ) => {
+                    let hand_final = real_sum!($e);
+                    let dealer_final = real_sum!(dealer);
+                    if !$e.busted && (hand_final >= dealer_final || dealer.busted) {
+                        if hand_final == dealer_final {
+                            println!("Push!");
+                            wallet.pay_out(1);
+                        } else {
+                            println!("You Win!");
+                            wallet.pay_out(2);
+                        }
+                    } else {
+                        println!("You Lose!");
+                        wallet.lose();
+                    }
+                };
             }
+
+            // --- Play ---
+            while choice(dealer_input!(), &mut deck, &mut dealer, &mut wallet) {}
+
+            let mut bet = 0usize;
+            let mut hand2 = Hand {
+                cards: Cards { cards: vec![] },
+                busted: false,
+                sum: Card::Def(0),
+            };
+
+            while choice(player_input!(hand), &mut deck, &mut hand, &mut wallet) {
+                if split {
+                    bet = wallet.bet;
+                    let val = hand.cards.cards[0] + Card::Def(0);
+                    hand2 = Hand {
+                        cards: Cards { cards: vec![val] },
+                        busted: false,
+                        sum: val,
+                    };
+                    hand2.hit(&mut deck);
+
+                    println!("--- HAND 1 ---");
+                    while choice(player_input!(hand2), &mut deck, &mut hand2, &mut wallet) {}
+
+                    println!("--- HAND 2 ---");
+                    split = false;
+                }
+            }
+
+            println!("--- DEALER ---");
+            dealer.show();
+
+            if bet != 0 {
+                win_lose!(hand2);
+                wallet.place_bet(bet).unwrap();
+            }
+
+            win_lose!(hand);
         }
+
         println!("Reshuffling cards...");
     }
 }
