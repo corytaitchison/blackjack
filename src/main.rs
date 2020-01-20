@@ -1,7 +1,8 @@
 use rand::{seq::SliceRandom, thread_rng};
 use std::io::{stdin, BufRead};
 
-const SHUFFLE_SIZE: usize = 10;
+const SHUFFLE_SIZE: usize = 62;
+const RESHUFFLE: usize = 10;
 const NUM_DECKS: usize = 4;
 const BUST_KWD: &str = &"bust";
 const STARTING_MONEY: usize = 1_000;
@@ -125,6 +126,7 @@ fn choice(input: &str, deck: &mut Deck, hand: &mut Hand, wallet: &mut Wallet) ->
             match wallet.double() {
                 Ok(_) => {
                     hand.hit(deck);
+                    hand.show();
                     return false;
                 }
                 Err(_) => {
@@ -147,10 +149,11 @@ fn play() {
     deck.shuffle();
 
     'main: loop {
-        if deck.drawables.len() < 10 {
+        if deck.drawables.len() < RESHUFFLE {
             break 'main;
         }
-
+        println!("-------");
+        println!("Balance: ${}", wallet.balance);
         println!("Place Bet:");
         if let Err(_) = wallet.place_bet(loop {
             if let Ok(n) = stdin()
@@ -224,14 +227,18 @@ fn play() {
             &mut wallet,
         ) {}
 
-        if !hand.busted && (hand.sum > dealer.sum || dealer.busted) {
-            println!("You Win!");
-            wallet.pay_out(2);
+        if !hand.busted && (hand.sum >= dealer.sum || dealer.busted) {
+            if hand.sum == dealer.sum {
+                println!("Push!");
+                wallet.pay_out(1);
+            } else {
+                println!("You Win!");
+                wallet.pay_out(2);
+            }
         } else {
             println!("You Lose!");
             wallet.lose();
         }
-        println!("Balance: ${}", wallet.balance);
     }
     println!("No cards left!");
 }
@@ -239,22 +246,3 @@ fn play() {
 fn main() {
     play();
 }
-
-// 'choice: loop {
-//     let input: String = stdin().lock().lines().next().unwrap().unwrap();
-//     match &input[..] {
-//         "s" => {
-//             play_dealer(&mut dealer, &mut deck);
-//             break 'choice;
-//         }
-//         "h" => hand.hit(&mut deck),
-//         _ => continue 'choice,
-//     };
-
-//     hand.show();
-//     if hand.sum > 21 {
-//         println!("Bust!");
-//         play_dealer(&mut dealer, &mut deck);
-//         break 'choice;
-//     }
-// }
