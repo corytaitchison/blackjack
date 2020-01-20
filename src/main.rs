@@ -1,11 +1,12 @@
 use rand::{seq::SliceRandom, thread_rng};
 use std::io::{stdin, BufRead};
 
-const SHUFFLE_SIZE: usize = 62;
-const RESHUFFLE: usize = 10;
+const SHUFFLE_SIZE: usize = 66;
+const RESHUFFLE: usize = 14;
 const NUM_DECKS: usize = 4;
 const BUST_KWD: &str = &"bust";
-const STARTING_MONEY: usize = 1_000;
+const STARTING_MONEY: usize = 1_000_000;
+const NUM_LOOPS: usize = 40_000;
 
 // --- CARDS ---
 
@@ -227,7 +228,6 @@ fn choice(input: &str, deck: &mut Deck, hand: &mut Hand, wallet: &mut Wallet) ->
                 }
                 Err(_) => {
                     println!("Balance too low (${})", wallet.balance);
-                    return true;
                 }
             };
         }
@@ -244,7 +244,7 @@ fn play() {
 
     let mut deck = Deck::new();
 
-    'play: loop {
+    'play: for _ in 0..NUM_LOOPS {
         deck.shuffle();
 
         'main: loop {
@@ -254,21 +254,25 @@ fn play() {
             println!("***********");
             println!("Balance: ${}", wallet.balance);
             println!("Place Bet:");
-            if let Err(_) = wallet.place_bet(loop {
-                if let Ok(n) = stdin()
-                    .lock()
-                    .lines()
-                    .next()
-                    .unwrap()
-                    .unwrap()
-                    .parse::<usize>()
-                {
-                    break n;
-                }
-            }) {
+            if let Err(_) = wallet.place_bet(25) {
                 println!("Balance too low (${})", wallet.balance);
-                continue 'main;
+                break 'main;
             }
+            // if let Err(_) = wallet.place_bet(loop {
+            //     if let Ok(n) = stdin()
+            //         .lock()
+            //         .lines()
+            //         .next()
+            //         .unwrap()
+            //         .unwrap()
+            //         .parse::<usize>()
+            //     {
+            //         break n;
+            //     }
+            // }) {
+            //     println!("Balance too low (${})", wallet.balance);
+            //     continue 'main;
+            // }
 
             let mut hand = Hand::new(&mut deck);
 
@@ -345,6 +349,24 @@ fn play() {
                 }};
             }
 
+            macro_rules! basic_input {
+                () => {{
+                    if real_sum!(hand) < 17 {
+                        "h"
+                    } else {
+                        if match hand.sum {
+                            Card::Def(n) => n > 21,
+                            _ => false,
+                        } {
+                            hand.busted = true;
+                            BUST_KWD
+                        } else {
+                            "s"
+                        }
+                    }
+                }};
+            }
+
             // --- Success Validation ---
 
             macro_rules! win_lose {
@@ -369,7 +391,7 @@ fn play() {
             // --- Play ---
             while choice(dealer_input!(), &mut deck, &mut dealer, &mut wallet) {}
 
-            while choice(player_input!(hand), &mut deck, &mut hand, &mut wallet) {
+            while choice(basic_input!(), &mut deck, &mut hand, &mut wallet) {
                 if split {
                     bet = wallet.bet;
                     let val = hand.cards.cards[0] + Card::Def(0);
@@ -388,6 +410,7 @@ fn play() {
                 }
             }
 
+            hand.show();
             println!("--- DEALER ---");
             dealer.show();
 
@@ -401,6 +424,8 @@ fn play() {
 
         println!("Reshuffling cards...");
     }
+
+    println!("Final Balance: {}", wallet.balance);
 }
 
 fn main() {
