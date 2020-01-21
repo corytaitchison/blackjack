@@ -1,24 +1,27 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+import numpy as np
 import seaborn as sns
 sns.set()
 
-f = open("tmp/with_bet.txt")
+f = open("tmp/basic_no_bet.txt")
 balances = [int(x) for x in f.read().split(", ")]
-df = pd.DataFrame(balances).melt()
+df = pd.DataFrame(balances[:1461563]).melt()
 
-f = open("tmp/without_bet.txt")
+f = open("tmp/no_strategy.txt")
 balances = [int(x) for x in f.read().split(", ")]
-df["Without Strategy"] = balances[:2442854]
+df["Dealer Strategy"] = balances[:1461563]
 
-f = open("tmp/random_bet.txt")
-balances = [int(x) for x in f.read().split(", ")]
-df["Random"] = balances[:2442854]
+f = open("tmp/random.txt")
+balances = np.pad([int(x) for x in f.read().split(", ")],
+                  (0, 1461563-142949), constant_values=0)
+df["Random"] = balances[:1461563]
 
 df = df.drop(['variable'], axis=1).rename(
-    columns={"value": "With Strategy"}).melt()
-df['index'] = [x % 2442854 for x in df.index]
+    columns={"value": "Basic Strategy"}).melt()
+df['index'] = [x % 1461563 for x in df.index]
 
 ax = sns.lineplot(x="index", y="value", hue="variable", data=df)
-ax.set(xlabel="Hand", ylabel="Balance", title="")
+ax.set(xlabel="Hand", ylabel="Balance",
+       title="Blackjack Earnings With Various Strategies")
 plt.show()

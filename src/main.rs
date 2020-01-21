@@ -1,14 +1,16 @@
-use rand::{seq::SliceRandom, thread_rng};
+// use rand::distributions::{Distribution, Uniform};
+use ndarray::arr2;
+use rand::{seq::SliceRandom, thread_rng, Rng};
 use std::fs::File;
 use std::io::{prelude::*, stdin, BufRead};
 
-const SHUFFLE_SIZE: usize = 156;
-const RESHUFFLE: usize = 14;
+const SHUFFLE_SIZE: usize = 260;
+const RESHUFFLE: usize = 18;
 const NUM_DECKS: usize = 6;
 const BUST_KWD: &str = &"bust";
 const STARTING_MONEY: usize = 1_000_000;
-const NUM_LOOPS: usize = 100_000;
-const BET_UNIT: usize = 5;
+const NUM_LOOPS: usize = 50_000;
+const BET_UNIT: usize = 25;
 
 // --- CARDS ---
 
@@ -74,6 +76,14 @@ macro_rules! real_sum {
     ( $e:expr ) => {
         match $e.sum {
             Card::Def(n) | Card::Maybe(_, n) => n,
+        }
+    };
+}
+
+macro_rules! to_index {
+    ( $e:expr ) => {
+        match $e {
+            Card::Def(n) | Card::Maybe(_, n) => (n - 2) as usize,
         }
     };
 }
@@ -235,7 +245,7 @@ fn choice(input: &str, deck: &mut Deck, hand: &mut Hand, wallet: &mut Wallet) ->
             match wallet.double() {
                 Ok(_) => {
                     hand.hit(deck);
-                    hand.show();
+                    // hand.show();
                     return false;
                 }
                 Err(_) => {
@@ -251,6 +261,7 @@ fn choice(input: &str, deck: &mut Deck, hand: &mut Hand, wallet: &mut Wallet) ->
 }
 
 #[allow(unused_assignments)]
+#[allow(unused_macros)]
 fn play() {
     let mut wallet = Wallet::new();
 
@@ -270,18 +281,21 @@ fn play() {
             // println!("Balance: ${}", wallet.balance);
             // println!("Place Bet:");
 
-            // if deck.counter <= 2 {
-            //     BET_UNIT
+            // if let Err(_) = wallet.place_bet(if deck.counter <= 2 {
+            //     (BET_UNIT as f64 * 0.5) as usize
             // } else {
             //     let bet = BET_UNIT as f32
             //         * (((deck.counter * 52) as f32
             //             / (NUM_DECKS * 52 - SHUFFLE_SIZE + remaining_cards) as f32)
             //             - 1f32);
             //     if bet <= BET_UNIT as f32 {
-            //         BET_UNIT
+            //         (BET_UNIT as f64 * 0.5) as usize
             //     } else {
             //         bet as usize
             //     }
+            // }) {
+            //     println!("Balance too low (${})", wallet.balance);
+            //     break 'main;
             // }
             if let Err(_) = wallet.place_bet(BET_UNIT) {
                 println!("Balance too low (${})", wallet.balance);
@@ -363,9 +377,85 @@ fn play() {
                 }};
             }
 
+            let rule_split = arr2(&[
+                [1, 1, 1, 1, 1, 1, 0, 0, 0, 0], // 2,2
+                [1, 1, 1, 1, 1, 1, 0, 0, 0, 0], // 3,3
+                [0, 0, 0, 1, 1, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                [1, 1, 1, 1, 1, 0, 0, 0, 0, 0],
+                [1, 1, 1, 1, 1, 1, 0, 0, 0, 0],
+                [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                [1, 1, 1, 1, 1, 0, 1, 1, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                [1, 1, 1, 1, 1, 1, 1, 1, 1, 1], // A,A
+            ]);
+
+            let rule_soft = arr2(&[
+                ["h", "h", "h", "d", "d", "h", "h", "h", "h", "h"], //A,A
+                ["h", "h", "h", "d", "d", "h", "h", "h", "h", "h"], //A,2
+                ["h", "h", "h", "d", "d", "h", "h", "h", "h", "h"], //A,3
+                ["h", "h", "d", "d", "d", "h", "h", "h", "h", "h"], //A,4
+                ["h", "h", "d", "d", "d", "h", "h", "h", "h", "h"],
+                ["h", "d", "d", "d", "d", "h", "h", "h", "h", "h"],
+                ["d", "d", "d", "d", "d", "s", "s", "h", "h", "h"],
+                ["s", "s", "s", "s", "d", "s", "s", "s", "s", "s"],
+                ["s", "s", "s", "s", "s", "s", "s", "s", "s", "s"],
+                ["s", "s", "s", "s", "s", "s", "s", "s", "s", "s"], // A,10
+            ]);
+
+            let rule_hard = arr2(&[
+                ["s", "d", "d", "d", "d", "s", "s", "s", "s", "s"], // 9
+                ["d", "d", "d", "d", "d", "d", "d", "d", "s", "s"], // 10
+                ["d", "d", "d", "d", "d", "d", "d", "d", "d", "d"], // 11
+                ["h", "h", "s", "s", "s", "h", "h", "h", "h", "h"],
+                ["s", "s", "s", "s", "s", "h", "h", "h", "h", "h"],
+                ["s", "s", "s", "s", "s", "h", "h", "h", "h", "h"],
+                ["s", "s", "s", "s", "s", "h", "h", "h", "h", "h"],
+                ["s", "s", "s", "s", "s", "h", "h", "h", "h", "h"], //16
+            ]);
+
             macro_rules! basic_input {
+                ( $e:expr ) => {{
+                    let dealer_up = dealer.cards.cards[0];
+
+                    if match $e.sum {
+                        Card::Def(n) => n > 21,
+                        _ => false,
+                    } {
+                        hand.busted = true;
+                        BUST_KWD
+                    } else {
+                        if $e.cards.cards[0] == $e.cards.cards[1]
+                        && bet == 0
+                        && wallet.balance >= wallet.bet
+                        && rule_split[[to_index!($e.cards.cards[0]), to_index!(dealer_up)]] == 1
+                        {
+                        split = true;
+                        $e.cards.cards.remove(1);
+                        $e.sum = $e.cards.cards[0];
+                        "h"
+                        } else {
+                            match $e.sum {
+                                Card::Maybe(_, _) => {
+                                    rule_soft[[(real_sum!($e)-12) as usize, to_index!(dealer_up)]]
+                                }
+                                Card::Def(n) => {
+                                    if n <= 8 { "h" } else {
+                                        if n >= 17 {"s"} else {
+                                            rule_hard[[(n-9) as usize, to_index!(dealer_up)]]
+                                        }
+                                    }
+                                },
+                            }
+                        }
+                    }
+                }};
+            }
+
+            macro_rules! random_input {
                 () => {{
-                    if real_sum!(hand) < 17 {
+                    let mut rng = rand::thread_rng();
+                    if rng.gen_range(0, 2) == 0 && real_sum!(hand) < 21 {
                         "h"
                     } else {
                         if match hand.sum {
@@ -379,6 +469,24 @@ fn play() {
                         }
                     }
                 }};
+            }
+
+            macro_rules! no_input {
+                () => {
+                    if real_sum!(hand) < 17 {
+                        "h"
+                    } else {
+                        if match hand.sum {
+                            Card::Def(n) => n > 21,
+                            _ => false,
+                        } {
+                            hand.busted = true;
+                            BUST_KWD
+                        } else {
+                            "s"
+                        }
+                    }
+                };
             }
 
             // --- Success Validation ---
@@ -405,7 +513,7 @@ fn play() {
             // --- Play ---
             while choice(dealer_input!(), &mut deck, &mut dealer, &mut wallet) {}
 
-            while choice(basic_input!(), &mut deck, &mut hand, &mut wallet) {
+            while choice(no_input!(), &mut deck, &mut hand, &mut wallet) {
                 if split {
                     bet = wallet.bet;
                     let val = hand.cards.cards[0] + Card::Def(0);
@@ -417,7 +525,7 @@ fn play() {
                     hand2.hit(&mut deck);
 
                     // println!("--- HAND 1 ---");
-                    while choice(player_input!(hand2), &mut deck, &mut hand2, &mut wallet) {}
+                    while choice(basic_input!(hand2), &mut deck, &mut hand2, &mut wallet) {}
 
                     // println!("--- HAND 2 ---");
                     split = false;
@@ -441,17 +549,17 @@ fn play() {
     }
 
     println!("Final Balance: {}", wallet.balance);
-    // let mut file = File::create("tmp/without_bet.txt").unwrap();
-    // writeln!(
-    //     file,
-    //     "{}",
-    //     running_balance
-    //         .iter()
-    //         .map(|w| w.to_string())
-    //         .collect::<Vec<String>>()
-    //         .join(", ")
-    // )
-    // .unwrap();
+    let mut file = File::create("tmp/no_strategy.txt").unwrap();
+    writeln!(
+        file,
+        "{}",
+        running_balance
+            .iter()
+            .map(|w| w.to_string())
+            .collect::<Vec<String>>()
+            .join(", ")
+    )
+    .unwrap();
 }
 
 fn main() {
