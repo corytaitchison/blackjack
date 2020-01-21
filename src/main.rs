@@ -1,12 +1,14 @@
 use rand::{seq::SliceRandom, thread_rng};
-use std::io::{stdin, BufRead};
+use std::fs::File;
+use std::io::{prelude::*, stdin, BufRead};
 
-const SHUFFLE_SIZE: usize = 66;
+const SHUFFLE_SIZE: usize = 156;
 const RESHUFFLE: usize = 14;
-const NUM_DECKS: usize = 4;
+const NUM_DECKS: usize = 6;
 const BUST_KWD: &str = &"bust";
 const STARTING_MONEY: usize = 1_000_000;
-const NUM_LOOPS: usize = 40_000;
+const NUM_LOOPS: usize = 100_000;
+const BET_UNIT: usize = 5;
 
 // --- CARDS ---
 
@@ -97,12 +99,13 @@ impl Cards {
 struct Deck {
     cards: Vec<Card>,
     drawables: Vec<Card>,
+    counter: isize,
 }
 
 impl Deck {
     // TODO: add counting mechanism to deck.draw()
     fn new() -> Self {
-        let mut deck: Vec<Card> = (0..52 * NUM_DECKS as u8).map(|_| Card::Def(1)).collect();
+        let mut deck: Vec<Card> = (0..52 * NUM_DECKS).map(|_| Card::Def(1)).collect();
         const VALS: [Card; 13] = [
             Card::Maybe(1, 11),
             Card::Def(2),
@@ -124,6 +127,7 @@ impl Deck {
         Deck {
             cards: deck,
             drawables: Vec::new(),
+            counter: 0,
         }
     }
 
@@ -133,11 +137,19 @@ impl Deck {
             .choose_multiple(&mut thread_rng(), SHUFFLE_SIZE)
             .map(|&c| c)
             .collect();
+        self.counter = 0;
     }
 
     fn draw(&mut self) -> Card {
         match self.drawables.pop() {
-            Some(n) => n,
+            Some(n) => {
+                self.counter += match n {
+                    Card::Maybe(_, _) | Card::Def(10) => 1,
+                    Card::Def(d) if d < 7 => -1,
+                    _ => 0,
+                };
+                n
+            }
             None => panic!("Not enough cards!"),
         }
     }
@@ -244,47 +256,49 @@ fn play() {
 
     let mut deck = Deck::new();
 
+    let mut running_balance: Vec<usize> = Vec::new();
+
     'play: for _ in 0..NUM_LOOPS {
         deck.shuffle();
 
         'main: loop {
-            if deck.drawables.len() < RESHUFFLE {
+            let remaining_cards = deck.drawables.len();
+            if remaining_cards < RESHUFFLE {
                 break 'main;
             }
-            println!("***********");
-            println!("Balance: ${}", wallet.balance);
-            println!("Place Bet:");
-            if let Err(_) = wallet.place_bet(25) {
+            // println!("***********");
+            // println!("Balance: ${}", wallet.balance);
+            // println!("Place Bet:");
+
+            // if deck.counter <= 2 {
+            //     BET_UNIT
+            // } else {
+            //     let bet = BET_UNIT as f32
+            //         * (((deck.counter * 52) as f32
+            //             / (NUM_DECKS * 52 - SHUFFLE_SIZE + remaining_cards) as f32)
+            //             - 1f32);
+            //     if bet <= BET_UNIT as f32 {
+            //         BET_UNIT
+            //     } else {
+            //         bet as usize
+            //     }
+            // }
+            if let Err(_) = wallet.place_bet(BET_UNIT) {
                 println!("Balance too low (${})", wallet.balance);
                 break 'main;
             }
-            // if let Err(_) = wallet.place_bet(loop {
-            //     if let Ok(n) = stdin()
-            //         .lock()
-            //         .lines()
-            //         .next()
-            //         .unwrap()
-            //         .unwrap()
-            //         .parse::<usize>()
-            //     {
-            //         break n;
-            //     }
-            // }) {
-            //     println!("Balance too low (${})", wallet.balance);
-            //     continue 'main;
-            // }
 
             let mut hand = Hand::new(&mut deck);
 
             if hand.sum == Card::Maybe(11, 21) {
-                hand.show();
-                println!("Blackjack!");
+                // hand.show();
+                // println!("Blackjack!");
                 wallet.pay_out(3);
                 continue 'main;
             }
 
             let mut dealer = Hand::new(&mut deck);
-            println!("Dealer: {}", dealer.cards.cards[0]);
+            // println!("Dealer: {}", dealer.cards.cards[0]);
 
             // --- Inputs ---
 
@@ -375,14 +389,14 @@ fn play() {
                     let dealer_final = real_sum!(dealer);
                     if !$e.busted && (hand_final >= dealer_final || dealer.busted) {
                         if hand_final == dealer_final {
-                            println!("Push!");
+                            // println!("Push!");
                             wallet.pay_out(1);
                         } else {
-                            println!("You Win!");
+                            // println!("You Win!");
                             wallet.pay_out(2);
                         }
                     } else {
-                        println!("You Lose!");
+                        // println!("You Lose!");
                         wallet.lose();
                     }
                 };
@@ -402,17 +416,17 @@ fn play() {
                     };
                     hand2.hit(&mut deck);
 
-                    println!("--- HAND 1 ---");
+                    // println!("--- HAND 1 ---");
                     while choice(player_input!(hand2), &mut deck, &mut hand2, &mut wallet) {}
 
-                    println!("--- HAND 2 ---");
+                    // println!("--- HAND 2 ---");
                     split = false;
                 }
             }
 
-            hand.show();
-            println!("--- DEALER ---");
-            dealer.show();
+            // hand.show();
+            // println!("--- DEALER ---");
+            // dealer.show();
 
             if bet != 0 {
                 win_lose!(hand2);
@@ -420,12 +434,24 @@ fn play() {
             }
 
             win_lose!(hand);
+            running_balance.push(wallet.balance);
         }
 
-        println!("Reshuffling cards...");
+        // println!("Reshuffling cards...");
     }
 
     println!("Final Balance: {}", wallet.balance);
+    // let mut file = File::create("tmp/without_bet.txt").unwrap();
+    // writeln!(
+    //     file,
+    //     "{}",
+    //     running_balance
+    //         .iter()
+    //         .map(|w| w.to_string())
+    //         .collect::<Vec<String>>()
+    //         .join(", ")
+    // )
+    // .unwrap();
 }
 
 fn main() {
